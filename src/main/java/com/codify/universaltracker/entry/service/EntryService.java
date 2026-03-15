@@ -120,8 +120,7 @@ public class EntryService {
 
         Page<Entry> page;
         if (filter.getFieldFilters().isEmpty()) {
-            page = entryRepository.findFiltered(
-                    trackerId, filter.getStatus(), filter.getFrom(), filter.getTo(), pageable);
+            page = findFilteredDynamic(trackerId, filter, pageable);
         } else {
             page = findFilteredWithFieldValues(trackerId, filter, pageable);
         }
@@ -254,6 +253,59 @@ public class EntryService {
     // =========================================================================
     // PRIVATE HELPERS
     // =========================================================================
+
+    /**
+     * Dynamic query — only adds WHERE clauses for non-null params.
+     * Avoids the PostgreSQL "could not determine data type of parameter" error
+     * that occurs when passing null for custom enum / timestamptz columns.
+     */
+    @SuppressWarnings("unchecked")
+    private Page<Entry> findFilteredDynamic(UUID trackerId, EntryFilterRequest filter, Pageable pageable) {
+        StringBuilder where = new StringBuilder(
+                "WHERE e.tracker_id = :trackerId AND e.deleted_at IS NULL");
+
+        if (filter.getStatus() != null) {
+            where.append(" AND e.status = CAST(:status AS entry_status)");
+        }
+        if (filter.getFrom() != null) {
+            where.append(" AND e.entry_date >= :from");
+        }
+        if (filter.getTo() != null) {
+            where.append(" AND e.entry_date <= :to");
+        }
+
+        String dataSQL  = "SELECT * FROM entry e " + where + " ORDER BY e.entry_date DESC";
+        String countSQL = "SELECT COUNT(*) FROM entry e " + where;
+
+        var dataQuery  = entityManager.createNativeQuery(dataSQL,  Entry.class);
+        var countQuery = entityManager.createNativeQuery(countSQL);
+
+        dataQuery.setParameter("trackerId", trackerId);
+        countQuery.setParameter("trackerId", trackerId);
+
+        if (filter.getStatus() != null) {
+            dataQuery.setParameter("status",  filter.getStatus().name().toLowerCase());
+            countQuery.setParameter("status", filter.getStatus().name().toLowerCase());
+        }
+        if (filter.getFrom() != null) {
+            dataQuery.setParameter("from",  filter.getFrom());
+            countQuery.setParameter("from", filter.getFrom());
+        }
+        if (filter.getTo() != null) {
+            dataQuery.setParameter("to",  filter.getTo());
+            countQuery.setParameter("to", filter.getTo());
+        }
+
+        int pageSize   = pageable.getPageSize();
+        int pageNumber = pageable.getPageNumber();
+        dataQuery.setFirstResult(pageNumber * pageSize);
+        dataQuery.setMaxResults(pageSize);
+
+        List<Entry> content = dataQuery.getResultList();
+        long total = ((Number) countQuery.getSingleResult()).longValue();
+
+        return new org.springframework.data.domain.PageImpl<>(content, pageable, total);
+    }
 
     private Entry findActiveEntry(UUID entryId) {
         return entryRepository.findByIdAndDeletedAtIsNull(entryId)

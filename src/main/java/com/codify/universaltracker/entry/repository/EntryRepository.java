@@ -1,7 +1,6 @@
 package com.codify.universaltracker.entry.repository;
 
 import com.codify.universaltracker.entry.entity.Entry;
-import com.codify.universaltracker.entry.enums.EntryStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -21,20 +20,7 @@ public interface EntryRepository extends JpaRepository<Entry, UUID> {
 
     Optional<Entry> findByIdAndDeletedAtIsNull(UUID id);
 
-    @Query("""
-            SELECT e FROM Entry e
-            WHERE e.trackerId = :trackerId
-              AND e.deletedAt IS NULL
-              AND (:status IS NULL OR e.status = :status)
-              AND (:from IS NULL OR e.entryDate >= :from)
-              AND (:to IS NULL OR e.entryDate <= :to)
-            """)
-    Page<Entry> findFiltered(
-            @Param("trackerId") UUID trackerId,
-            @Param("status") EntryStatus status,
-            @Param("from") Instant from,
-            @Param("to") Instant to,
-            Pageable pageable);
+    // findFiltered removed — use EntryService.findFilteredDynamic() via EntityManager
 
     @Modifying
     @Query("UPDATE Entry e SET e.deletedAt = :now WHERE e.id IN :ids AND e.userId = :userId")

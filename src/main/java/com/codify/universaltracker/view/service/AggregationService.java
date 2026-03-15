@@ -63,25 +63,19 @@ public class AggregationService {
 
     private AggregateResponse scalar(UUID trackerId, String fieldSlug, String fn, Instant from, Instant to) {
         String valueColumn = "COUNT".equals(fn) ? "e.id" : "fv.value_number";
-        String sql = """
-                SELECT %s(%s)
-                FROM entry e
-                JOIN field_value fv ON fv.entry_id = e.id
-                JOIN field_definition fd ON fd.id = fv.field_definition_id
-                WHERE e.tracker_id = :trackerId
-                  AND e.deleted_at IS NULL
-                  AND fd.slug = :fieldSlug
-                  AND (:from IS NULL OR e.entry_date >= :from)
-                  AND (:to   IS NULL OR e.entry_date <= :to)
-                """.formatted(fn, valueColumn);
+        String where = buildDateWhere(from, to);
+        String sql = ("SELECT %s(%s) FROM entry e " +
+                "JOIN field_value fv ON fv.entry_id = e.id " +
+                "JOIN field_definition fd ON fd.id = fv.field_definition_id " +
+                "WHERE e.tracker_id = :trackerId AND e.deleted_at IS NULL AND fd.slug = :fieldSlug"
+                + where).formatted(fn, valueColumn);
 
-        Object result = em.createNativeQuery(sql)
+        var query = em.createNativeQuery(sql)
                 .setParameter("trackerId", trackerId)
-                .setParameter("fieldSlug", fieldSlug)
-                .setParameter("from", from)
-                .setParameter("to", to)
-                .getSingleResult();
+                .setParameter("fieldSlug", fieldSlug);
+        applyDateParams(query, from, to);
 
+        Object result = query.getSingleResult();
         BigDecimal total = result == null ? BigDecimal.ZERO : new BigDecimal(result.toString());
         return AggregateResponse.scalar(fn, fieldSlug, total);
     }
@@ -94,32 +88,24 @@ public class AggregationService {
     private AggregateResponse grouped(UUID trackerId, String fieldSlug, String fn,
                                        String groupBySlug, Instant from, Instant to) {
         String valueColumn = "COUNT".equals(fn) ? "e.id" : "fv.value_number";
-        String sql = """
-                SELECT
-                    COALESCE(gfv.value_text, CAST(gfv.value_number AS TEXT), 'unknown') AS grp,
-                    %s(%s) AS agg_value
-                FROM entry e
-                JOIN field_value fv  ON fv.entry_id  = e.id
-                JOIN field_definition fd  ON fd.id   = fv.field_definition_id
-                JOIN field_value gfv ON gfv.entry_id = e.id
-                JOIN field_definition gfd ON gfd.id  = gfv.field_definition_id
-                WHERE e.tracker_id = :trackerId
-                  AND e.deleted_at IS NULL
-                  AND fd.slug  = :fieldSlug
-                  AND gfd.slug = :groupBySlug
-                  AND (:from IS NULL OR e.entry_date >= :from)
-                  AND (:to   IS NULL OR e.entry_date <= :to)
-                GROUP BY grp
-                ORDER BY agg_value DESC
-                """.formatted(fn, valueColumn);
+        String where = buildDateWhere(from, to);
+        String sql = ("SELECT COALESCE(gfv.value_text, CAST(gfv.value_number AS TEXT), 'unknown') AS grp, " +
+                "%s(%s) AS agg_value " +
+                "FROM entry e " +
+                "JOIN field_value fv ON fv.entry_id = e.id " +
+                "JOIN field_definition fd ON fd.id = fv.field_definition_id " +
+                "JOIN field_value gfv ON gfv.entry_id = e.id " +
+                "JOIN field_definition gfd ON gfd.id = gfv.field_definition_id " +
+                "WHERE e.tracker_id = :trackerId AND e.deleted_at IS NULL " +
+                "AND fd.slug = :fieldSlug AND gfd.slug = :groupBySlug" + where +
+                " GROUP BY grp ORDER BY agg_value DESC").formatted(fn, valueColumn);
 
-        List<Object[]> rows = em.createNativeQuery(sql)
+        var query = em.createNativeQuery(sql)
                 .setParameter("trackerId", trackerId)
                 .setParameter("fieldSlug", fieldSlug)
-                .setParameter("groupBySlug", groupBySlug)
-                .setParameter("from", from)
-                .setParameter("to", to)
-                .getResultList();
+                .setParameter("groupBySlug", groupBySlug);
+        applyDateParams(query, from, to);
+        List<Object[]> rows = query.getResultList();
 
         List<GroupEntry> groups = new ArrayList<>();
         for (Object[] row : rows) {
@@ -148,28 +134,21 @@ public class AggregationService {
             default      -> "YYYY-MM";
         };
 
-        String sql = """
-                SELECT
-                    TO_CHAR(DATE_TRUNC('%s', e.entry_date), '%s') AS period,
-                    %s(%s) AS agg_value
-                FROM entry e
-                JOIN field_value fv ON fv.entry_id = e.id
-                JOIN field_definition fd ON fd.id  = fv.field_definition_id
-                WHERE e.tracker_id = :trackerId
-                  AND e.deleted_at IS NULL
-                  AND fd.slug = :fieldSlug
-                  AND (:from IS NULL OR e.entry_date >= :from)
-                  AND (:to   IS NULL OR e.entry_date <= :to)
-                GROUP BY DATE_TRUNC('%s', e.entry_date)
-                ORDER BY DATE_TRUNC('%s', e.entry_date) ASC
-                """.formatted(bucket, periodFormat, fn, valueColumn, bucket, bucket);
+        String where = buildDateWhere(from, to);
+        String sql = ("SELECT TO_CHAR(DATE_TRUNC('%s', e.entry_date), '%s') AS period, " +
+                "%s(%s) AS agg_value " +
+                "FROM entry e " +
+                "JOIN field_value fv ON fv.entry_id = e.id " +
+                "JOIN field_definition fd ON fd.id = fv.field_definition_id " +
+                "WHERE e.tracker_id = :trackerId AND e.deleted_at IS NULL AND fd.slug = :fieldSlug" + where +
+                " GROUP BY DATE_TRUNC('%s', e.entry_date) ORDER BY DATE_TRUNC('%s', e.entry_date) ASC")
+                .formatted(bucket, periodFormat, fn, valueColumn, bucket, bucket);
 
-        List<Object[]> rows = em.createNativeQuery(sql)
+        var query = em.createNativeQuery(sql)
                 .setParameter("trackerId", trackerId)
-                .setParameter("fieldSlug", fieldSlug)
-                .setParameter("from", from)
-                .setParameter("to", to)
-                .getResultList();
+                .setParameter("fieldSlug", fieldSlug);
+        applyDateParams(query, from, to);
+        List<Object[]> rows = query.getResultList();
 
         List<SeriesEntry> series = new ArrayList<>();
         for (Object[] row : rows) {
@@ -192,18 +171,28 @@ public class AggregationService {
 
     @Transactional(readOnly = true)
     public long countEntries(UUID trackerId, Instant from, Instant to) {
-        String sql = """
-                SELECT COUNT(*) FROM entry e
-                WHERE e.tracker_id = :trackerId
-                  AND e.deleted_at IS NULL
-                  AND (:from IS NULL OR e.entry_date >= :from)
-                  AND (:to   IS NULL OR e.entry_date <= :to)
-                """;
-        Object result = em.createNativeQuery(sql)
-                .setParameter("trackerId", trackerId)
-                .setParameter("from", from)
-                .setParameter("to", to)
-                .getSingleResult();
+        String where = buildDateWhere(from, to);
+        String sql = "SELECT COUNT(*) FROM entry e WHERE e.tracker_id = :trackerId AND e.deleted_at IS NULL" + where;
+        var query = em.createNativeQuery(sql).setParameter("trackerId", trackerId);
+        applyDateParams(query, from, to);
+        Object result = query.getSingleResult();
         return result == null ? 0L : ((Number) result).longValue();
+    }
+
+    // =========================================================================
+    // Helpers
+    // =========================================================================
+
+    private String buildDateWhere(Instant from, Instant to) {
+        StringBuilder sb = new StringBuilder();
+        if (from != null) sb.append(" AND e.entry_date >= :from");
+        if (to   != null) sb.append(" AND e.entry_date <= :to");
+        return sb.toString();
+    }
+
+    @SuppressWarnings("rawtypes")
+    private void applyDateParams(jakarta.persistence.Query query, Instant from, Instant to) {
+        if (from != null) query.setParameter("from", from);
+        if (to   != null) query.setParameter("to",   to);
     }
 }
