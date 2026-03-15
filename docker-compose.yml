@@ -1,0 +1,25 @@
+services:
+
+  app:
+    image: universal-tracker:latest
+    container_name: tracker-app
+    build: .
+    restart: unless-stopped
+    environment:
+      DB_NAME: tracker
+      DB_USERNAME: postgres
+      DB_PASSWORD: admin
+    ports:
+      - "8080:8080"
+    networks:
+      - tracker-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  tracker-net:
+    external: true
