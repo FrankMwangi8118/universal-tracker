@@ -372,7 +372,7 @@ public class AutomationEngine {
 
     /**
      * Evaluates a simple left-to-right arithmetic expression (no precedence, no parentheses).
-     * Good enough for basic formula automations like "a + b * c" where execution order matters less.
+     * Good enough for basic formula automatio  ns like "a + b * c" where execution order matters less.
      */
     private BigDecimal evalSimpleExpression(String expr) {
         expr = expr.trim();

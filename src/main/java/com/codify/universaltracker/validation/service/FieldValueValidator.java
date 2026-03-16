@@ -21,7 +21,7 @@ public class FieldValueValidator {
     private final FieldValueRepository fieldValueRepository;
 
     public FieldValueValidator(ValidationRuleRepository ruleRepository,
-                                FieldValueRepository fieldValueRepository) {
+                               FieldValueRepository fieldValueRepository) {
         this.ruleRepository = ruleRepository;
         this.fieldValueRepository = fieldValueRepository;
     }
@@ -116,7 +116,8 @@ public class FieldValueValidator {
             if (min != null && num.compareTo(min) < 0) {
                 return message(rule, "Value must be at least " + min);
             }
-        } catch (NumberFormatException ignored) {}
+        } catch (NumberFormatException ignored) {
+        }
         return null;
     }
 
@@ -128,7 +129,8 @@ public class FieldValueValidator {
             if (max != null && num.compareTo(max) > 0) {
                 return message(rule, "Value must be at most " + max);
             }
-        } catch (NumberFormatException ignored) {}
+        } catch (NumberFormatException ignored) {
+        }
         return null;
     }
 
@@ -160,7 +162,8 @@ public class FieldValueValidator {
             if (!Pattern.matches(patternParam.toString(), value.toString())) {
                 return message(rule, "Value does not match required format");
             }
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
         return null;
     }
 

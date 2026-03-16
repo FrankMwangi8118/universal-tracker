@@ -8,7 +8,8 @@ public final class UserContext {
 
     private static final ThreadLocal<UUID> CURRENT_USER = new ThreadLocal<>();
 
-    private UserContext() {}
+    private UserContext() {
+    }
 
     public static void set(UUID userId) {
         CURRENT_USER.set(userId);
