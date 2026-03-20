@@ -8,7 +8,7 @@ Built on **Spring Boot 4 + PostgreSQL** using the **EAV (Entity–Attribute–Va
 
 ## What It Does
 
-Universal Tracker lets you model *any* structured data domain through configuration instead of code. Rather than building a new database schema for every use case, you define **modules** (domains), **collections** (tables), and **custom fields** (columns) at runtime — the platform handles storage, validation, querying, and aggregation automatically.
+A Tracker lets you model *any* structured data domain through configuration instead of code. Rather than building a new database schema for every use case, you define **modules** (domains), **collections** (tables), and **custom fields** (columns) at runtime — the platform handles storage, validation, querying, and aggregation automatically.
 
 **Example use cases you can spin up without touching code:**
 
